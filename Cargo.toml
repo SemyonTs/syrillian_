@@ -54,7 +54,7 @@ syrillian_examples = { version = "0.1.1", path = "syrillian_examples", default-f
 syrillian_shadergen = { version = "0.7.1", path = "syrillian_shadergen", default-features = false }
 syrillian_render = { version = "0.7.1", path = "syrillian_render", default-features = false }
 
-wgpu = { version = "28.0", default-features = false, features = ["wgsl"] }
+wgpu = { version = "29.0", default-features = false, features = ["wgsl"] }
 naga = { version = "28.0", features = ["stderr"] }
 kira = { version = "0.11", default-features = false, features = ["flac", "mp3", "ogg", "wav"] }
 nalgebra = "0.34"

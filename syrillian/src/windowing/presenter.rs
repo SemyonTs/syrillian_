@@ -5,8 +5,8 @@ use syrillian_render::rendering::state::State;
 use syrillian_render::rendering::viewport::ViewportId;
 use tracing::{error, warn};
 use wgpu::{
-    CommandEncoderDescriptor, Extent3d, Origin3d, Surface, SurfaceConfiguration, SurfaceError,
-    TexelCopyTextureInfo, TextureAspect,
+    CommandEncoderDescriptor, CurrentSurfaceTexture, Extent3d, Origin3d, Surface,
+    SurfaceConfiguration, TexelCopyTextureInfo, TextureAspect,
 };
 use winit::dpi::PhysicalSize;
 use winit::window::{Window, WindowId};
@@ -141,35 +141,39 @@ impl Presenter {
             return false;
         }
 
-        let mut output = match viewport.surface.get_current_texture() {
-            Ok(output) => output,
-            Err(SurfaceError::Lost | SurfaceError::Outdated) => {
+        // wgpu 29: `get_current_texture` returns a `CurrentSurfaceTexture` enum
+        // instead of `Result<SurfaceTexture, SurfaceError>`.
+        let output = match viewport.surface.get_current_texture() {
+            CurrentSurfaceTexture::Success(output) => output,
+            CurrentSurfaceTexture::Suboptimal(_) => {
+                // The surface is still usable, but the swapchain is not ideal.
+                // Reconfigure and retry to get a fresh, non-suboptimal frame.
+                warn!("Surface output is suboptimal; reconfiguring surface");
+                viewport
+                    .surface
+                    .configure(&self.state.device, &viewport.config);
+                match viewport.surface.get_current_texture() {
+                    CurrentSurfaceTexture::Success(output)
+                    | CurrentSurfaceTexture::Suboptimal(output) => output,
+                    _ => return false,
+                }
+            }
+            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
+                // Skip this frame; the window is not visible or the surface is busy.
+                return true;
+            }
+            CurrentSurfaceTexture::Outdated | CurrentSurfaceTexture::Lost => {
+                // Swapchain needs recreation; reconfigure and skip this frame.
                 viewport
                     .surface
                     .configure(&self.state.device, &viewport.config);
                 return true;
             }
-            Err(SurfaceError::OutOfMemory) => {
-                error!("The application ran out of GPU memory!");
-                return false;
-            }
-            Err(SurfaceError::Timeout) => return true,
-            Err(e @ SurfaceError::Other) => {
-                error!("Surface acquisition failed: {e}");
+            CurrentSurfaceTexture::Validation => {
+                error!("Surface validation error during present");
                 return false;
             }
         };
-
-        if output.suboptimal {
-            warn!("Surface output is suboptimal; reconfiguring surface");
-            viewport
-                .surface
-                .configure(&self.state.device, &viewport.config);
-            output = match viewport.surface.get_current_texture() {
-                Ok(output) => output,
-                Err(_) => return false,
-            };
-        }
 
         let copy_width = viewport.config.width.min(frame.size.width);
         let copy_height = viewport.config.height.min(frame.size.height);

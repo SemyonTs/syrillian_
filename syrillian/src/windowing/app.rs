@@ -152,7 +152,13 @@ impl<S: AppState> App<S> {
 
         trace!("Created render surface");
 
-        let (state, surface, config) = match State::new(&main_window) {
+        // wgpu 29: `InstanceDescriptor` requires an owned display handle.
+        // It can only be obtained from the `EventLoop` / `ActiveEventLoop`,
+        // not from `Window`. `OwnedDisplayHandle` is `Clone`, so it is safe
+        // to move a copy into `State::new`.
+        let owned_display_handle = event_loop.owned_display_handle();
+
+        let (state, surface, config) = match State::new(&main_window, owned_display_handle) {
             Ok(state) => state,
             Err(err) => {
                 error!("Couldn't create render state: {err}");

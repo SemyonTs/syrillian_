@@ -62,6 +62,7 @@ impl RenderViewport {
         id: ViewportId,
         mut config: SurfaceConfiguration,
         device: &Device,
+        queue: &Queue,
         cache: &AssetCache,
     ) -> Self {
         Self::clamp_config(&mut config);
@@ -76,7 +77,7 @@ impl RenderViewport {
             fallback_skybox.view().clone(),
             fallback_skybox.sampler().clone(),
         );
-        let post_pipeline = RenderPipeline::new(device, cache, &config);
+        let post_pipeline = RenderPipeline::new(device, queue, cache, &config);
 
         RenderViewport {
             id,
@@ -107,12 +108,14 @@ impl RenderViewport {
         &mut self,
         mut config: SurfaceConfiguration,
         device: &Device,
+        queue: &Queue,
         cache: &AssetCache,
     ) {
         Self::clamp_config(&mut config);
         self.config = config;
 
-        self.render_pipeline.recreate(device, cache, &self.config);
+        self.render_pipeline
+            .recreate(device, queue, cache, &self.config);
         self.picking_surface.recreate(device, &self.config);
     }
 

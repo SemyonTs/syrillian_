@@ -3,6 +3,7 @@ use std::error::Error;
 use syrillian::SyrillianApp;
 use syrillian::assets::store::StoreType;
 use syrillian::assets::{HMesh, MaterialInstance};
+use syrillian::components::CameraComponent;
 use syrillian::math::Vec3;
 use syrillian::{AppState, World};
 use syrillian_components::prefabs::SunPrefab;
@@ -14,6 +15,9 @@ pub struct PBR {}
 impl AppState for PBR {
     fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         let mut camera = world.new_camera().parent();
+        if let Some(mut cam_comp) = camera.get_component::<CameraComponent>() {
+            cam_comp.set_near(0.5);
+        }
         camera.add_component::<FreecamController>();
         camera.transform.set_position(0.0, 2.0, 30.0);
 

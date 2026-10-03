@@ -11,16 +11,19 @@ pub enum ShaderValidError {
 
 impl ShaderValidError {
     pub fn emit_to_stderr(&self, source: &str) {
-        match self {
-            ShaderValidError::Parse(e) => e.emit_to_stderr(source),
-            ShaderValidError::ValidationError(e) => e.emit_to_stderr(source),
-        }
+        // naga (bundled with wgpu 29) removed `emit_to_stderr`; render the
+        // diagnostic to a string and print it ourselves.
+        eprintln!("{}", self.emit_to_string(source));
     }
 
     pub fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
         match self {
-            ShaderValidError::Parse(e) => e.emit_to_stderr_with_path(source, path),
-            ShaderValidError::ValidationError(e) => e.emit_to_stderr_with_path(source, path),
+            ShaderValidError::Parse(e) => {
+                eprintln!("{}", e.emit_to_string_with_path(source, path));
+            }
+            ShaderValidError::ValidationError(e) => {
+                eprintln!("{}", e.emit_to_string_with_path(source, path));
+            }
         }
     }
 
@@ -28,6 +31,13 @@ impl ShaderValidError {
         match self {
             ShaderValidError::Parse(e) => e.emit_to_string(source),
             ShaderValidError::ValidationError(e) => e.emit_to_string(source),
+        }
+    }
+
+    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
+        match self {
+            ShaderValidError::Parse(e) => e.emit_to_string_with_path(source, path),
+            ShaderValidError::ValidationError(e) => e.emit_to_string_with_path(source, path),
         }
     }
 }

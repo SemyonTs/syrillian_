@@ -4,11 +4,77 @@ use std::cmp::Ordering;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Copy, Clone, Default)]
 pub enum AntiAliasingMode {
+    /// No anti-aliasing.
     Off,
+    /// Fast Approximate Anti-Aliasing — a cheap post-process.
     #[default]
     Fxaa,
+    /// FidelityFX Super Resolution 3.
+    /// With `fsr_render_scale == 1.0` it works as TAA,
+    /// otherwise as an upscaler.
+    Fsr,
+    /// Multi-Sample Anti-Aliasing with the given sample count (2/4/8).
+    /// Requires changing `sample_count` on render targets.
+    Msaa(u32),
+    /// Supersampling — render at a higher resolution and downscale.
+    /// `factor` — how many times larger to render (e.g. 1.5 or 2.0).
+    Supersample(f32),
+}
+
+impl PartialEq for AntiAliasingMode {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Off, Self::Off) => true,
+            (Self::Fxaa, Self::Fxaa) => true,
+            (Self::Fsr, Self::Fsr) => true,
+            (Self::Msaa(a), Self::Msaa(b)) => a == b,
+            (Self::Supersample(a), Self::Supersample(b)) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for AntiAliasingMode {}
+
+impl AntiAliasingMode {
+    /// Whether the mode requires temporal accumulation (motion vectors, jitter).
+    pub fn is_temporal(self) -> bool {
+        matches!(self, Self::Fsr)
+    }
+
+    /// Whether the mode requires a post-process pass.
+    pub fn is_post_process(self) -> bool {
+        matches!(self, Self::Fxaa | Self::Fsr)
+    }
+
+    /// Whether motion vectors are needed by the scene.
+    pub fn needs_motion_vectors(self) -> bool {
+        matches!(self, Self::Fsr)
+    }
+
+    /// Whether projection jitter is needed.
+    pub fn needs_jitter(self) -> bool {
+        matches!(self, Self::Fsr)
+    }
+
+    /// Render resolution multiplier (>1.0 for SSAA, 1.0 for others).
+    pub fn render_scale(self) -> f32 {
+        match self {
+            Self::Supersample(factor) => factor.clamp(1.0, 4.0),
+            Self::Fsr => EngineArgs::fsr_render_scale(),
+            _ => 1.0,
+        }
+    }
+
+    /// Sample count for MSAA mode, otherwise 1.
+    pub fn sample_count(self) -> u32 {
+        match self {
+            Self::Msaa(n) => n.clamp(1, 8),
+            _ => 1,
+        }
+    }
 }
 
 fn present_mode(mode: &str) -> Result<Option<wgpu::PresentMode>, String> {
@@ -63,8 +129,11 @@ fn force_backend(backend: &str) -> Result<Option<Vec<wgpu::Backends>>, String> {
 
 fn aa_mode(mode: &str) -> Result<Option<AntiAliasingMode>, String> {
     let mode = match mode {
-        "off" => AntiAliasingMode::Off,
+        "off" | "none" => AntiAliasingMode::Off,
         "fxaa" => AntiAliasingMode::Fxaa,
+        "fsr" | "taa" => AntiAliasingMode::Fsr,
+        "ssaa1.5" => AntiAliasingMode::Supersample(1.5),
+        "ssaa2" => AntiAliasingMode::Supersample(2.0),
         _ => return Ok(None),
     };
     Ok(Some(mode))
@@ -115,6 +184,22 @@ pub struct EngineArgs {
     pub bloom_clamp_max: Option<f32>,
     #[argh(option, hidden_help)]
     pub bloom_blur_passes: Option<u32>,
+
+    /// fsr sharpness in [0.0, 1.0]. 0.0 disables RCAS sharpening.
+    #[argh(option, hidden_help)]
+    pub fsr_sharpness: Option<f32>,
+
+    /// render-scale for FSR upscaling. 1.0 = 1:1 (TAA only).
+    #[argh(option, hidden_help)]
+    pub fsr_render_scale: Option<f32>,
+
+    /// treat depth buffer as inverted (reverse-Z).
+    #[argh(switch, hidden_help)]
+    pub depth_inverted: bool,
+
+    /// treat depth buffer as infinite (reversed-Z with infinite far plane).
+    #[argh(switch, hidden_help)]
+    pub depth_infinite: bool,
 }
 
 impl EngineArgs {
@@ -149,5 +234,42 @@ impl EngineArgs {
 
     pub fn aa_mode() -> AntiAliasingMode {
         EngineArgs::get().aa_mode.flatten().unwrap_or_default()
+    }
+
+    /// Whether FSR is currently active based on the AA mode.
+    pub fn fsr_enabled() -> bool {
+        matches!(Self::aa_mode(), AntiAliasingMode::Fsr)
+    }
+
+    /// RCAS sharpness for FSR in [0.0, 1.0]. Returns `0.5` by default.
+    pub fn fsr_sharpness_value() -> f32 {
+        EngineArgs::get()
+            .fsr_sharpness
+            .unwrap_or(0.5)
+            .clamp(0.0, 1.0)
+    }
+
+    /// Whether the RCAS sharpening pass should run.
+    pub fn fsr_sharpening() -> bool {
+        Self::fsr_sharpness_value() > 0.0
+    }
+
+    /// Render-scale factor for FSR upscaling. Clamped to `[0.1, 1.0]`.
+    /// `1.0` means no upscaling (FSR acts as TAA).
+    pub fn fsr_render_scale() -> f32 {
+        EngineArgs::get()
+            .fsr_render_scale
+            .unwrap_or(1.0)
+            .clamp(0.1, 1.0)
+    }
+
+    /// Whether the depth buffer uses reverse-Z (inverted depth).
+    pub fn depth_inverted() -> bool {
+        EngineArgs::get().depth_inverted
+    }
+
+    /// Whether the depth buffer has an infinite far plane.
+    pub fn depth_infinite() -> bool {
+        EngineArgs::get().depth_infinite
     }
 }

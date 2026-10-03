@@ -10,8 +10,8 @@ use wgpu::{
 
 const DEFAULT_DEPTH_STENCIL: DepthStencilState = DepthStencilState {
     format: TextureFormat::Depth32Float,
-    depth_write_enabled: true,
-    depth_compare: CompareFunction::LessEqual,
+    depth_write_enabled: Some(true),
+    depth_compare: Some(wgpu::CompareFunction::LessEqual),
     stencil: StencilState {
         front: StencilFaceState::IGNORE,
         back: StencilFaceState::IGNORE,
@@ -27,8 +27,8 @@ const DEFAULT_DEPTH_STENCIL: DepthStencilState = DepthStencilState {
 
 const SHADOW_DEPTH_STENCIL: DepthStencilState = DepthStencilState {
     format: TextureFormat::Depth32Float,
-    depth_write_enabled: true,
-    depth_compare: CompareFunction::LessEqual,
+    depth_write_enabled: Some(true),
+    depth_compare: Some(CompareFunction::LessEqual),
     stencil: StencilState {
         front: StencilFaceState::IGNORE,
         back: StencilFaceState::IGNORE,

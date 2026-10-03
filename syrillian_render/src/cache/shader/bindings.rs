@@ -9,7 +9,7 @@ pub trait ShaderBindings {
         &self,
         device: &Device,
         layout_name: &str,
-        fixed_bgls: &[&BindGroupLayout],
+        fixed_bgls: &[Option<&BindGroupLayout>],
     ) -> PipelineLayout;
 }
 
@@ -53,7 +53,10 @@ impl ShaderBindings for Shader {
     fn pipeline_layout(&self, device: &Device, cache: &AssetCache) -> PipelineLayout {
         let layout_name = format!("{} Pipeline Layout", self.name());
         let layouts = self.collect_bgls(cache);
-        let refs: Vec<&BindGroupLayout> = layouts.iter().collect();
+
+        // wgpu 29: `bind_group_layouts` is now `&[Option<&BindGroupLayout>]`
+        // so that the layout may contain gaps for unbound slots.
+        let refs: Vec<Option<&BindGroupLayout>> = layouts.iter().map(Some).collect();
 
         self.pipeline_layout_with(device, &layout_name, &refs)
     }
@@ -62,7 +65,7 @@ impl ShaderBindings for Shader {
         &self,
         device: &Device,
         layout_name: &str,
-        fixed_bgls: &[&BindGroupLayout],
+        fixed_bgls: &[Option<&BindGroupLayout>],
     ) -> PipelineLayout {
         let desc = PipelineLayoutDescriptor {
             label: Some(layout_name),

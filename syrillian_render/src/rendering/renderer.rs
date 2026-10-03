@@ -81,7 +81,13 @@ impl Renderer {
         let mut viewports = HashMap::new();
         viewports.insert(
             ViewportId::PRIMARY,
-            RenderViewport::new(ViewportId::PRIMARY, primary_config, &state.device, &cache),
+            RenderViewport::new(
+                ViewportId::PRIMARY,
+                primary_config,
+                &state.device,
+                &state.queue,
+                &cache,
+            ),
         );
 
         let mut strobe = StrobeRenderer::default();
@@ -213,7 +219,7 @@ impl Renderer {
             return false;
         };
 
-        viewport.resize(config, &self.state.device, &self.cache);
+        viewport.resize(config, &self.state.device, &self.state.queue, &self.cache);
 
         true
     }
@@ -905,7 +911,13 @@ impl Renderer {
             return Ok(());
         }
 
-        let viewport = RenderViewport::new(target_id, config, &self.state.device, &self.cache);
+        let viewport = RenderViewport::new(
+            target_id,
+            config,
+            &self.state.device,
+            &self.state.queue,
+            &self.cache,
+        );
         self.viewports.insert(target_id, viewport);
 
         Ok(())

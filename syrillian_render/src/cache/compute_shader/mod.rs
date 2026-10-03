@@ -37,7 +37,8 @@ impl CacheType for ComputeShader {
                     .expect("Compute shader bind group layout should exist")
             })
             .collect::<Vec<_>>();
-        let bgl_refs = bgls.iter().collect::<Vec<_>>();
+        // wgpu 29: `bind_group_layouts` is now `&[Option<&BindGroupLayout>]`
+        let bgl_refs = bgls.iter().map(Some).collect::<Vec<_>>();
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(&format!("{} Pipeline Layout", this.name())),

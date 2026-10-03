@@ -16,6 +16,7 @@ use wgpu::{
     RequestAdapterOptions, RequestDeviceError, Surface, SurfaceConfiguration, TextureFormat,
 };
 use winit::dpi::PhysicalSize;
+use winit::event_loop::OwnedDisplayHandle;
 use winit::window::Window;
 
 const DEFAULT_BACKENDS: &[Backends] = &[
@@ -54,14 +55,16 @@ impl State {
     // will respect the order of backends passed instead of a plain `Backends`
     fn try_setup_instance_with<'a>(
         window: &'a Window,
+        display_handle: OwnedDisplayHandle,
         backends: &[Backends],
     ) -> Result<(Instance, Surface<'a>)> {
         for backend in backends {
-            let mut desc = InstanceDescriptor::from_env_or_default();
-
+            let mut desc = InstanceDescriptor::new_with_display_handle_from_env(Box::new(
+                display_handle.clone(),
+            ));
             desc.backends = *backend;
 
-            let instance = Instance::new(&desc);
+            let instance = Instance::new(desc);
             let surface = instance.create_surface(window).context(CreateSurfaceErr);
             if let Ok(surface) = surface {
                 info!("Selected backend: {}", first_backend_to_str(*backend));
@@ -78,17 +81,21 @@ impl State {
             "Couldn't start on any selected graphics backend. Retrying with all available backends"
         );
 
-        Self::setup_instance(window)
+        Self::setup_instance(window, display_handle)
     }
 
-    fn setup_instance<'a>(window: &'a Window) -> Result<(Instance, Surface<'a>)> {
-        let mut desc = InstanceDescriptor::from_env_or_default();
+    fn setup_instance<'a>(
+        window: &'a Window,
+        display_handle: OwnedDisplayHandle,
+    ) -> Result<(Instance, Surface<'a>)> {
+        let mut desc =
+            InstanceDescriptor::new_with_display_handle_from_env(Box::new(display_handle));
 
         if !cfg!(target_os = "linux") {
             desc.backends ^= Backends::VULKAN;
         }
 
-        let instance = Instance::new(&desc);
+        let instance = Instance::new(desc);
         let surface = instance.create_surface(window).context(CreateSurfaceErr)?;
         Ok((instance, surface))
     }
@@ -114,18 +121,65 @@ impl State {
     }
 
     async fn get_device_and_queue(adapter: &Adapter) -> Result<(Device, Queue)> {
+        let adapter_limits = adapter.limits();
+        let max_storage_textures = adapter_limits.max_storage_textures_per_shader_stage;
+        let required_storage_textures = if max_storage_textures >= 8 {
+            8
+        } else {
+            warn!(
+                "Adapter supports only {max_storage_textures} storage textures/stage; FSR needs 8"
+            );
+            max_storage_textures
+        };
+
+        let adapter_features = adapter.features();
+
+        // FSR3 uses storage textures, which on some GPUs
+        // require TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES.
+        let mut required_features = Features::default()
+            | Features::POLYGON_MODE_LINE
+            | Features::IMMEDIATES
+            | Features::ADDRESS_MODE_CLAMP_TO_BORDER
+            | Features::TEXTURE_FORMAT_16BIT_NORM
+            | Features::CLEAR_TEXTURE
+            | Features::TEXTURE_COMPRESSION_BC;
+
+        if adapter_features.contains(Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES) {
+            required_features |= Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+        } else {
+            warn!(
+                "Adapter does not support TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES — FSR may fail"
+            );
+        }
+
+        // In wgpu 29.0.4, naga mishandles @coherent/@volatile in FSR shaders.
+        // PASSTHROUGH_SHADERS bypasses naga, passing SPIR-V directly to the driver.
+        if adapter_features.contains(Features::PASSTHROUGH_SHADERS) {
+            required_features |= Features::PASSTHROUGH_SHADERS;
+            info!("Enabling PASSTHROUGH_SHADERS for FSR compatibility");
+        } else {
+            warn!(
+                "Adapter does not support PASSTHROUGH_SHADERS — \
+                FSR shaders may fail naga validation on this GPU"
+            );
+        }
+
+        if adapter_features.contains(Features::FLOAT32_FILTERABLE) {
+            required_features |= Features::FLOAT32_FILTERABLE;
+        } else {
+            warn!(
+                "Adapter does not support FLOAT32_FILTERABLE — FSR internal Rg32Float textures will fail"
+            );
+        }
+
         let (device, queue) = adapter
             .request_device(&DeviceDescriptor {
                 label: Some("Renderer Hardware"),
-                required_features: Features::default()
-                    | Features::POLYGON_MODE_LINE
-                    | Features::IMMEDIATES
-                    | Features::ADDRESS_MODE_CLAMP_TO_BORDER
-                    | Features::TEXTURE_FORMAT_16BIT_NORM
-                    | Features::TEXTURE_COMPRESSION_BC,
+                required_features,
                 required_limits: Limits {
                     max_bind_groups: 6,
                     max_immediate_size: 128,
+                    max_storage_textures_per_shader_stage: required_storage_textures,
                     ..Limits::default()
                 },
                 experimental_features: ExperimentalFeatures::disabled(),
@@ -205,7 +259,10 @@ impl State {
         Ok(unsafe { mem::transmute::<Surface<'_>, Surface<'static>>(surface) })
     }
 
-    pub fn new(window: &Window) -> Result<(Self, Surface<'static>, SurfaceConfiguration)> {
+    pub fn new(
+        window: &Window,
+        display_handle: OwnedDisplayHandle,
+    ) -> Result<(Self, Surface<'static>, SurfaceConfiguration)> {
         let backends = EngineArgs::get()
             .force_backend
             .as_ref()
@@ -214,7 +271,7 @@ impl State {
 
         trace!("Starting with backends: {:?}", backends);
 
-        let (instance, surface) = Self::try_setup_instance_with(window, backends)?;
+        let (instance, surface) = Self::try_setup_instance_with(window, display_handle, backends)?;
         // SAFETY: The surface stores the window handle internally and the caller owns the window.
         let surface = unsafe { mem::transmute::<Surface<'_>, Surface<'static>>(surface) };
         let adapter = block_on(Self::setup_adapter(&instance, Some(&surface)));
