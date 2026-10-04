@@ -432,7 +432,10 @@ impl Renderer {
             return None;
         }
 
-        let data = slice.get_mapped_range();
+        let Ok(data) = slice.get_mapped_range() else {
+            buffer.unmap();
+            return None;
+        };
         let mut bytes = [0u8; 4];
         bytes.copy_from_slice(&data[..4]);
         drop(data);

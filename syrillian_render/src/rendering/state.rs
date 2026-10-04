@@ -246,6 +246,7 @@ impl State {
                 .unwrap_or(wgpu::CompositeAlphaMode::Auto),
             view_formats: vec![],
             desired_maximum_frame_latency: max_frame_latency,
+            color_space: wgpu::SurfaceColorSpace::Srgb,
         })
     }
 

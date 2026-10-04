@@ -210,7 +210,7 @@ impl Presenter {
 
         self.state.queue.submit(Some(encoder.finish()));
         viewport.window.pre_present_notify();
-        output.present();
+        self.state.queue.present(output);
 
         true
     }

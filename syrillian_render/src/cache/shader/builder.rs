@@ -52,7 +52,7 @@ pub struct RenderPipelineBuilder<'a> {
     pub has_depth: bool,
     pub polygon_mode: PolygonMode,
     pub topology: PrimitiveTopology,
-    pub vertex_buffers: &'a [VertexBufferLayout<'a>],
+    pub vertex_buffers: Vec<Option<VertexBufferLayout<'a>>>,
     pub is_custom: bool,
     pub is_opaque: bool,
     pub color_target: &'a [Option<ColorTargetState>],
@@ -99,7 +99,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                 module: self.module,
                 entry_point: None,
                 compilation_options: PipelineCompilationOptions::default(),
-                buffers: self.vertex_buffers,
+                buffers: &self.vertex_buffers,
             },
             primitive: PrimitiveState {
                 topology: self.topology,
@@ -135,7 +135,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                 module: self.module,
                 entry_point: None,
                 compilation_options: PipelineCompilationOptions::default(),
-                buffers: self.vertex_buffers,
+                buffers: &self.vertex_buffers,
             },
             primitive: PrimitiveState {
                 topology: self.topology,
@@ -172,12 +172,18 @@ impl<'a> RenderPipelineBuilder<'a> {
             ShaderType::Custom => format!("{name} Custom Pipeline"),
         };
 
-        let vertex_buffers = match shader.stage() {
-            ShaderType::Default => &DEFAULT_VBL,
-            ShaderType::Picking | ShaderType::Shadow if shader.is_opaque() => &DEFAULT_VBL[0..1],
-            ShaderType::Picking | ShaderType::Shadow => shader.vertex_buffers(),
-            ShaderType::Custom => shader.vertex_buffers(),
-            ShaderType::PostProcessing => &[],
+        let vertex_buffers: Vec<Option<VertexBufferLayout<'a>>> = match shader.stage() {
+            ShaderType::Default => DEFAULT_VBL.iter().map(|b| Some(b.clone())).collect(),
+            ShaderType::Picking | ShaderType::Shadow if shader.is_opaque() => {
+                DEFAULT_VBL[0..1].iter().map(|b| Some(b.clone())).collect()
+            }
+            ShaderType::Picking | ShaderType::Shadow => {
+                shader.vertex_buffers().iter().map(|b| Some(b.clone())).collect()
+            }
+            ShaderType::Custom => {
+                shader.vertex_buffers().iter().map(|b| Some(b.clone())).collect()
+            }
+            ShaderType::PostProcessing => Vec::new(),
         };
 
         let color_target = match shader.stage() {

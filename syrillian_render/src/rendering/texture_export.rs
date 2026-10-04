@@ -150,7 +150,15 @@ pub fn read_texture_as_rgba(
         Err(_) => return Err(TextureExportError::MapChannelClosed),
     }
 
-    let data = slice.get_mapped_range();
+    let data = match slice.get_mapped_range() {
+        Ok(d) => d,
+        Err(_) => {
+            buffer.unmap();
+            return Err(TextureExportError::Unavailable {
+                reason: "failed to get mapped buffer range",
+            });
+        }
+    };
     let mut pixels = Vec::with_capacity((width * height * bytes_per_pixel) as usize);
 
     const NEAR: f32 = 0.1;
