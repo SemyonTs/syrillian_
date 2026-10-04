@@ -38,4 +38,4 @@ more-asserts = "0.3"
 half = "2.7"
 zerocopy.workspace = true
 bitflags = "2.11"
-wgpu-ffx = "0.1.0"
+wgpu-ffx = { git = "https://github.com/SemyonTs/wgpu-ffx" }

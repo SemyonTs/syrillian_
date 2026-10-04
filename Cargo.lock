@@ -2315,7 +2315,6 @@ dependencies = [
  "log",
  "num-traits",
  "once_cell",
- "petgraph",
  "rustc-hash 1.1.0",
  "spirv",
  "thiserror 2.0.18",
@@ -2342,6 +2341,7 @@ dependencies = [
  "naga-types",
  "num-traits",
  "once_cell",
+ "petgraph",
  "rustc-hash 1.1.0",
  "spirv",
  "thiserror 2.0.18",
@@ -5081,23 +5081,21 @@ dependencies = [
 [[package]]
 name = "wgpu-ffx"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a5d4fec8a3ed04c3113f186faf0e8c69b17ad34ba2106fb36a20c58b80ff07d"
+source = "git+https://github.com/SemyonTs/wgpu-ffx#8cef26cf518eff9148d287e410aeb3be742a7b8c"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
  "half",
  "pollster",
  "thiserror 2.0.18",
- "wgpu 29.0.0",
+ "wgpu 30.0.1",
  "wgpu-ffx-shaders-spv",
 ]
 
 [[package]]
 name = "wgpu-ffx-shaders-spv"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7188412df1ef6714a00704b21b568c67e317c2fb09fbafe59baf0bd43ec43ff"
+source = "git+https://github.com/SemyonTs/wgpu-ffx#8cef26cf518eff9148d287e410aeb3be742a7b8c"
 
 [[package]]
 name = "wgpu-hal"
